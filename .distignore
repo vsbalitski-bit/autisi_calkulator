@@ -1,0 +1,5 @@
+# Raw Traficom source archive is a local build dependency only.
+# This archive must never be packaged into the plugin release zip.
+**/traficom_vehicles_2026.zip
+**/*.zip
+!dist/autosi-kululaskuri.zip
