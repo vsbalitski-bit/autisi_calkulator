@@ -11,6 +11,7 @@ from build_traficom_catalog import (
     brand_is_placeholder,
     canonical_brand_key,
     canonical_model_key,
+    clean_variant,
     model_is_designation,
     model_is_obsolete,
     model_is_rare,
@@ -115,7 +116,7 @@ class CatalogNormalizationTests(unittest.TestCase):
         result = normalize_catalog([first, second])
 
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]['variant'], 'Camper Matkailuauto (AF)')
+        self.assertEqual(result[0]['variant'], 'Camper')
         self.assertNotIn('[', result[0]['variant'])
         self.assertEqual(result[0]['registered_count'], 3)
 
@@ -406,6 +407,32 @@ class CatalogNormalizationTests(unittest.TestCase):
         result = normalize_catalog([first, second])
 
         self.assertEqual({item['variant'] for item in result}, {'Golf 1.6 TDI, 81 kW', 'Golf 2.0 TDI, 110 kW'})
+
+    def test_clean_variant_strips_doors_body_and_code_tails(self):
+        self.assertEqual(
+            clean_variant('INSIGHT Viistoperä (AB) 4ov 1339cm3, 65 kW'),
+            'INSIGHT 1.3, 65 kW',
+        )
+        self.assertEqual(
+            clean_variant('GLE 400 d 4MATIC Coupe Farmari (AC) 5ov 2925cm3 A, 243 kW'),
+            'GLE 400 d 4MATIC 2.9 A, 243 kW',
+        )
+
+    def test_clean_variant_keeps_engine_and_trim_tokens(self):
+        # Engine codes, displacement, trims and power must never be stripped.
+        self.assertEqual(clean_variant('D-4D, 110 kW'), 'D-4D, 110 kW')
+        self.assertEqual(clean_variant('I-PACE, 294 kW'), 'I-PACE, 294 kW')
+        self.assertEqual(clean_variant('MX-5, 96 kW'), 'MX-5, 96 kW')
+        self.assertEqual(clean_variant('9-3, 110 kW'), '9-3, 110 kW')
+        self.assertEqual(clean_variant('quattro, 200 kW'), 'quattro, 200 kW')
+
+    def test_clean_variant_converts_cm3_and_decimal_comma(self):
+        self.assertEqual(clean_variant('760i 4ov 5972cm3 A, 400 kW'), '760i 6 A, 400 kW')
+        self.assertEqual(clean_variant('CEED 1,6 CRDI ECO SP, 100 kW'), 'CEED 1.6 CRDI ECO SP, 100 kW')
+
+    def test_clean_variant_is_empty_when_only_noise_remains(self):
+        self.assertEqual(clean_variant('Farmari (AC) 5ov'), '')
+        self.assertEqual(clean_variant('4ov'), '')
 
     def test_engine_words_are_dropped_from_model_names(self):
         self.assertEqual(strip_engine_words('RAV 4 Hybrid'), 'RAV 4')

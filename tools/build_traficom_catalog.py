@@ -562,6 +562,69 @@ def visible_variant(variant, approval):
     return re.sub(r'\s{2,}', ' ', value).strip()
 
 
+# Technical noise that Traficom's `mallimerkinta` repeats inside a version label but the
+# picker must not show: door counts (`4ov`, `5D`), body-style words and their letter codes
+# (`Farmari`, `(AC)`, `Sedan`), transmission wording and type-approval code tails
+# (`-1J/250`, `/266`, `-140028`). The engine itself — displacement, engine family
+# (`TDI`/`CDI`), trims and the `, N kW` power suffix — is what identifies a version, so it
+# is kept. The door patterns require a whitespace/start boundary so hyphenated engine codes
+# (`D-4D`), Saab models (`9-3`) and trims (`4-MOTION`, `MX-5`) are never touched.
+VARIANT_POWER_RE = re.compile(r'\s*,\s*\d+(?:[.,]\d+)?\s*kW\s*$', re.I)
+VARIANT_BODY_CODE_RE = re.compile(r'\s*\([A-Z]{1,2}\)')
+VARIANT_DOOR_RE = re.compile(
+    r'(?:(?<=^)|(?<=\s))\d+\s*ov(?=\s|,|$)'          # 4ov
+    r'|(?:(?<=^)|(?<=\s))[2-6][dD](?=\s|,|$|[A-Z])',  # 4D / 4DSEDAN (glued door code)
+    re.I,
+)
+VARIANT_BODY_WORD_RE = re.compile(
+    r'(?i)\b(?:sedan|hatchback|cabriolet|coupe|coupé|touring|st[wm]|farmari|viistoper[äa]|'
+    r'avoauto|avolava|umpikorinen|monik[äa]ytt[öo]ajoneuvo|matkailuauto|combi|kombi|mpv|kasten|doppel)\b'
+)
+VARIANT_TRANSMISSION_RE = re.compile(r'(?i)\b(?:automatic|automat|autom)\b')
+VARIANT_CODE_TAIL_RE = re.compile(r'(?i)-[a-z0-9]{1,6}/[0-9]{2,4}\b|/[0-9]{2,4}\b|-\d{3,}\b')
+VARIANT_CM3_RE = re.compile(r'(\d{3,4})\s*cm3', re.I)
+VARIANT_LITRES_RE = re.compile(r'\b\d[.,]\d\b')
+VARIANT_COMMA_DECIMAL_RE = re.compile(r'(\d),(\d)')
+
+
+def _displacement_litres(cm3):
+    """`5972cm3` -> `6`; `1995cm3` -> `2`; `1591cm3` -> `1.6`."""
+    litres = int(cm3) / 1000
+    return f'{litres:.1f}'.rstrip('0').rstrip('.')
+
+
+def clean_variant(variant):
+    """Reduce a Traficom model designation to the engine description the picker shows.
+
+    The version list (`Moottori / käyttövoima`) must read like an engine, not a data
+    sheet: `INSIGHT Viistoperä (AB) 4ov 1339cm3, 65 kW` becomes `INSIGHT 1.3, 65 kW`.
+    Door counts, body words/codes, transmission wording and code tails are dropped;
+    displacement is normalised to litres and the decimal comma to a point. When only
+    noise was present, the result is empty (the picker then shows just the fuel and
+    years), so a version is never left as a technical string.
+    """
+    value = clean(variant)
+    if not value:
+        return ''
+    power_match = VARIANT_POWER_RE.search(value)
+    power = power_match.group(0).strip() if power_match else ''
+    if power_match:
+        value = value[:power_match.start()].rstrip(' ,-/')
+    value = VARIANT_BODY_CODE_RE.sub(' ', value)
+    value = VARIANT_CODE_TAIL_RE.sub(' ', value)
+    value = VARIANT_DOOR_RE.sub(' ', value)
+    value = VARIANT_BODY_WORD_RE.sub(' ', value)
+    value = VARIANT_TRANSMISSION_RE.sub(' ', value)
+    if VARIANT_LITRES_RE.search(value):
+        value = VARIANT_CM3_RE.sub(' ', value)
+    else:
+        value = VARIANT_CM3_RE.sub(lambda match: _displacement_litres(match.group(1)), value)
+    value = re.sub(r'\s{2,}', ' ', value).strip(' ,-/')
+    result = (value + (power if power else '')).strip(' ,-/')
+    result = VARIANT_COMMA_DECIMAL_RE.sub(r'\1.\2', result)
+    return re.sub(r'\s{2,}', ' ', result).strip(' ,-/')
+
+
 def model_is_designation(model, variant):
     """True when Malli shows the raw technical designation (== variant base).
 
@@ -858,8 +921,8 @@ def normalize_catalog(items):
         # the user, so they merge even when a cost-driving value differs. The picker shows
         # neither the type-approval code (`visible_variant()`) nor the legacy `[CO₂ …]` suffix
         # the builder once appended, so both are stripped before the merge key is built.
-        item['variant'] = visible_variant(
-            strip_variant_detail(item.get('variant')), item.get('type_approval')
+        item['variant'] = clean_variant(
+            visible_variant(strip_variant_detail(item.get('variant')), item.get('type_approval'))
         )
         key = (item['brand'], item['model'], item['powertrain'], item['variant'], item['years'], item['vehicle_type'])
         if key not in merged:
@@ -1136,6 +1199,17 @@ def validate_catalog(items):
     bracketed = next((item['variant'] for item in items if VARIANT_DETAIL_RE.search(item['variant'])), None)
     if bracketed:
         raise ValueError(f'Catalogue normalization produced a bracketed variant label: {bracketed!r}')
+    noisy = next(
+        (
+            item['variant'] for item in items
+            if VARIANT_DOOR_RE.search(item['variant'])
+            or VARIANT_CM3_RE.search(item['variant'])
+            or VARIANT_BODY_CODE_RE.search(item['variant'])
+        ),
+        None,
+    )
+    if noisy:
+        raise ValueError(f'Catalogue normalization produced a technical-noise variant label: {noisy!r}')
     visible_labels = [
         (item['brand'], item['model'], item['powertrain'], item['variant'], item['years'], item['vehicle_type'])
         for item in items
