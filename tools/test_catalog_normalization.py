@@ -28,6 +28,8 @@ from build_traficom_catalog import (
     selectable_models,
     strip_body_words,
     strip_engine_words,
+    strip_model_from_variant,
+    strip_variant_code_letter,
     strip_variant_detail,
     validate_catalog,
     validate_index,
@@ -472,6 +474,38 @@ class CatalogNormalizationTests(unittest.TestCase):
     def test_clean_variant_is_empty_when_only_noise_remains(self):
         self.assertEqual(clean_variant('Farmari (AC) 5ov'), '')
         self.assertEqual(clean_variant('4ov'), '')
+
+    def test_clean_variant_strips_bare_version_codes(self):
+        # A dash + two letters + digits tail is a Traficom version code, not an engine.
+        self.assertEqual(clean_variant('X5 3.0D -FF41, 173 kW'), 'X5 3.0D, 173 kW')
+        # Hyphenated engine codes are untouched.
+        self.assertEqual(clean_variant('D-4D, 110 kW'), 'D-4D, 110 kW')
+        self.assertEqual(clean_variant('MX-5, 96 kW'), 'MX-5, 96 kW')
+
+    def test_strip_model_from_variant_drops_the_model_prefix(self):
+        self.assertEqual(strip_model_from_variant('Insight', 'INSIGHT 1.3, 65 kW'), '1.3, 65 kW')
+        self.assertEqual(strip_model_from_variant('Evanda', 'EVANDA 2.0, 96 kW'), '2.0, 96 kW')
+        self.assertEqual(strip_model_from_variant('XK8', 'XK8 4 A, 209 kW'), '4 A, 209 kW')
+        self.assertEqual(strip_model_from_variant('G 63 AMG', 'G 63 AMG 5.5 A, 400 kW'), '5.5 A, 400 kW')
+        # A variant that is only the model stays untouched.
+        self.assertEqual(strip_model_from_variant('I-PACE', 'I-PACE'), 'I-PACE')
+        # A different model name must not strip anything.
+        self.assertEqual(strip_model_from_variant('Golf', 'INSIGHT 1.3, 65 kW'), 'INSIGHT 1.3, 65 kW')
+
+    def test_strip_variant_code_letter_drops_standalone_a(self):
+        self.assertEqual(strip_variant_code_letter('2 A, 140 kW'), '2, 140 kW')
+        self.assertEqual(strip_variant_code_letter('4.8 A'), '4.8')
+        self.assertEqual(strip_variant_code_letter('6 A, 400 kW'), '6, 400 kW')
+        # Engine/trim tokens that merely contain or are NOT a standalone A stay.
+        self.assertEqual(strip_variant_code_letter('D-4D, 110 kW'), 'D-4D, 110 kW')
+        self.assertEqual(strip_variant_code_letter('1.8 TSI, 118 kW'), '1.8 TSI, 118 kW')
+        # A leading `A-2D` is a model + door code, not a variant-code letter.
+        self.assertEqual(strip_variant_code_letter('A-2D TUDOR, 30 kW'), 'A-2D TUDOR, 30 kW')
+
+    def test_normalization_strips_model_prefix_from_versions(self):
+        item = catalog_item('a', brand='Honda', model='Insight', variant='INSIGHT Viistoperä (AB) 4ov 1339cm3, 65 kW')
+        result = normalize_catalog([item])
+        self.assertEqual(result[0]['variant'], '1.3, 65 kW')
 
     def test_engine_words_are_dropped_from_model_names(self):
         self.assertEqual(strip_engine_words('RAV 4 Hybrid'), 'RAV 4')

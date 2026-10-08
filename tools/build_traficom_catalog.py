@@ -647,7 +647,7 @@ VARIANT_BODY_WORD_RE = re.compile(
     r'avoauto|avolava|umpikorinen|monik[äa]ytt[öo]ajoneuvo|matkailuauto|combi|kombi|mpv|kasten|doppel)\b'
 )
 VARIANT_TRANSMISSION_RE = re.compile(r'(?i)\b(?:automatic|automat|autom)\b')
-VARIANT_CODE_TAIL_RE = re.compile(r'(?i)-[a-z0-9]{1,6}/[0-9]{2,4}\b|/[0-9]{2,4}\b|-\d{3,}\b')
+VARIANT_CODE_TAIL_RE = re.compile(r'(?i)-[a-z0-9]{1,6}/[0-9]{2,4}\b|/[0-9]{2,4}\b|-\d{3,}\b|-[a-z]{2}\d{1,4}\b')
 VARIANT_CM3_RE = re.compile(r'(\d{3,4})\s*cm3', re.I)
 VARIANT_LITRES_RE = re.compile(r'\b\d[.,]\d\b')
 VARIANT_COMMA_DECIMAL_RE = re.compile(r'(\d),(\d)')
@@ -689,6 +689,39 @@ def clean_variant(variant):
     result = (value + (power if power else '')).strip(' ,-/')
     result = VARIANT_COMMA_DECIMAL_RE.sub(r'\1.\2', result)
     return re.sub(r'\s{2,}', ' ', result).strip(' ,-/')
+
+
+def strip_model_from_variant(model, variant):
+    """Drop a leading model-name prefix from a version label (case-insensitive).
+
+    `catalog_item()` builds the variant from the model designation/commercial name, so
+    it often starts with the model itself (`INSIGHT 1.3, 65 kW`). The Malli field already
+    names the model, so that prefix is noise in the version list. Never applied to a row
+    that `model_is_designation()` flags — those keep their variant so the designation
+    detector still recognises them.
+    """
+    value = clean(variant)
+    m = clean(model)
+    if not value or not m:
+        return value
+    pattern = re.compile(r'(?i)^\s*' + re.escape(m) + r'\b')
+    stripped = pattern.sub(' ', value, count=1)
+    stripped = re.sub(r'\s{2,}', ' ', stripped).strip(' ,-/')
+    return stripped or value
+
+
+def strip_variant_code_letter(variant):
+    """Drop a standalone Traficom variant-code letter (`2 A, 140 kW` -> `2, 140 kW`).
+
+    The code letter always follows the displacement, so it is only stripped after a
+    digit; a leading `A-2D` (Ford Model A + 2-door) is not a code letter and stays.
+    """
+    value = clean(variant)
+    if not value:
+        return ''
+    value = re.sub(r'(?i)(?<=\d)\s+[Aa]\b', '', value)
+    value = re.sub(r'\s+,\s*', ', ', value)  # collapse the gap left before a comma
+    return re.sub(r'\s{2,}', ' ', value).strip(' ,-/')
 
 
 def model_is_designation(model, variant):
@@ -1023,6 +1056,10 @@ def normalize_catalog(items):
         item['variant'] = clean_variant(
             visible_variant(strip_variant_detail(item.get('variant')), item.get('type_approval'))
         )
+        if not model_is_designation(item['model'], item['variant']):
+            item['variant'] = strip_variant_code_letter(
+                clean_variant(strip_model_from_variant(item['model'], item['variant']))
+            )
         key = (item['brand'], item['model'], item['powertrain'], item['variant'], item['years'], item['vehicle_type'], visible_body(item.get('body_type', '')))
         if key not in merged:
             merged[key] = item

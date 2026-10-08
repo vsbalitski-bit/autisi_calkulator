@@ -236,12 +236,16 @@
 				// The catalogue merges every row that reads the same, so a label is unique —
 				// except when no type filter is chosen: the same text can then describe a car
 				// registered in two classes (passenger vs van), which the type name separates.
-				const typeSuffix = car => fields.vehicleType.value || ! car.vehicle_type ? '' : ` · ${ vehicleTypeLabel( car.vehicle_type ) }`;
-				const bodySuffix = car => { const body = bodyLabels[ car.body_type ]; return body ? ` · ${ body }` : ''; };
-				const versionOptions = cars.map( car => ( {
-					value: car.id,
-					label: `${ typeLabels[ car.powertrain ] || car.powertrain } · ${ cleanVariant( car ) }${ bodySuffix( car ) } · ${ car.years }${ typeSuffix( car ) }`
-				} ) ).sort( ( a, b ) => a.label.localeCompare( b.label, locale, { sensitivity: 'base' } ) );
+				const versionOptions = cars.map( car => {
+					const parts = [ typeLabels[ car.powertrain ] || car.powertrain ];
+					const variantText = cleanVariant( car );
+					if ( variantText ) parts.push( variantText );
+					const body = bodyLabels[ car.body_type ];
+					if ( body ) parts.push( body );
+					parts.push( car.years );
+					if ( ! fields.vehicleType.value && car.vehicle_type ) parts.push( vehicleTypeLabel( car.vehicle_type ) );
+					return { value: car.id, label: parts.join( ' · ' ) };
+				} ).sort( ( a, b ) => a.label.localeCompare( b.label, locale, { sensitivity: 'base' } ) );
 				fillSelect( fields.vehicle, versionOptions, t.versionPlaceholder );
 				if ( ! cars.length && powertrain ) {
 					root.querySelector( '.ak-model-note' ).textContent = t.noVersionsForFuel;
