@@ -435,11 +435,50 @@ def strip_engine_words(model):
     return value or str(model or '')
 
 
+# Body-style wording that must not split one Malli entry into several: the picker groups
+# body variants under the base model (`A3 Sportback`, `A4 Avant`, `Octavia Kombi` -> `A3`,
+# `A4`, `Octavia`) the way a car marketplace does, while the version list still tells the
+# body apart. Only words that always denote a body style are listed; trims (`GTI`), drivetrain
+# badges (`quattro`, `4x4`) and ambiguous words that are often part of a model name (`Coupé`,
+# `Sedan`, `Roadster`, `Van`, `Pickup`) are deliberately kept.
+MODEL_BODY_WORDS_RE = re.compile(
+    r'(?i)\b(?:'
+    r'farmari|viistoper[äa]|avoauto|avolava|umpikorinen|monik[äa]ytt[öo]ajoneuvo|matkailuauto|'
+    r'variant|sportback|avant|tourer|combi|kombi|estate|station\s+wagon|sports\s+tourer|'
+    r'break|turnier|sw|stw|gran\s+turismo|gran\s+coupe|sport\s+turismo'
+    r')\b'
+)
+
+
+def strip_body_words(model):
+    """Remove body-style wording from a model name (never the whole name)."""
+    value = MODEL_BODY_WORDS_RE.sub(' ', str(model or ''))
+    value = re.sub(r'\s{2,}', ' ', value)
+    value = value.strip(' -,/')
+    return value or str(model or '')
+
+
+# Body-style codes the version list labels (mirrors the JS `bodyLabels` map exactly).
+# Codes that share a label (BA/BE) and codes without a label (buses, special-purpose,
+# empty) are deliberately identical here, so they merge the way the user sees them.
+BODY_LABELS = {
+    'AA': 'Sedan', 'AB': 'Viistoperä', 'AC': 'Farmari', 'AD': 'Coupé',
+    'AE': 'Avoauto', 'AF': 'Tila-auto', 'SA': 'Matkailuauto', 'BB': 'Pakettiauto',
+    'BA': 'Avolava-auto', 'BE': 'Avolava-auto',
+}
+
+
+def visible_body(body_type):
+    """The body text the version list shows, or '' when the code has no label."""
+    return BODY_LABELS.get(clean(body_type).upper(), '')
+
+
 def model_series_key(brand, model):
-    """Identity of a model ignoring series/class and engine wording (`RAV 4 Hybrid` == `Rav4`)."""
+    """Identity of a model ignoring series/class, engine and body wording (`RAV 4 Hybrid` == `Rav4`)."""
     base = normalize_model(brand, clean(model))
     base = base.translate(SUPERSCRIPT)
     base = strip_engine_words(base)
+    base = strip_body_words(base)
     base = re.sub(r'(?i)\s*\(\s*(\d{1,3})\s+series\s*\)', r' \1', base)
     base = SERIES_WORDS_RE.sub(' ', base)
     base = re.sub(r'(?i)\b(\d{1,3})er\b', r'\1', base)
@@ -902,7 +941,7 @@ def normalize_catalog(items):
     for item in items:
         brand = resolve_brand(item['brand'])
         model = model_typo_fix(brand, clean(item['model']))
-        model = strip_engine_words(strip_make_from_model(brand, model))
+        model = strip_body_words(strip_engine_words(strip_make_from_model(brand, model)))
         key = (canonical_brand_key(brand), model_series_key(brand, model))
         model_weights[key][model] += int(item.get('registered_count', 0))
     canonical_models = {key: model_display(names) for key, names in model_weights.items()}
@@ -924,7 +963,7 @@ def normalize_catalog(items):
         item['variant'] = clean_variant(
             visible_variant(strip_variant_detail(item.get('variant')), item.get('type_approval'))
         )
-        key = (item['brand'], item['model'], item['powertrain'], item['variant'], item['years'], item['vehicle_type'])
+        key = (item['brand'], item['model'], item['powertrain'], item['variant'], item['years'], item['vehicle_type'], visible_body(item.get('body_type', '')))
         if key not in merged:
             merged[key] = item
             continue
@@ -946,7 +985,7 @@ def normalize_catalog(items):
     # Safety net: guarantee uniqueness even for input that bypassed the merge key above.
     label = lambda entry: (
         entry['brand'], entry['model'], entry['powertrain'], entry['variant'],
-        entry.get('years', ''), entry['vehicle_type'],
+        entry.get('years', ''), entry['vehicle_type'], visible_body(entry.get('body_type', '')),
     )
     used_labels = set()
     for item in normalized:
@@ -1175,6 +1214,8 @@ def validate_index(index, items, models=None):
             raise ValueError(f'Picker index has an unsupported powertrain code: {key!r} {codes!r}.')
         if MODEL_ENGINE_WORDS_RE.search(entry['model']):
             raise ValueError(f'Picker index model name still carries engine wording: {key!r}.')
+        if strip_body_words(entry['model']) != entry['model']:
+            raise ValueError(f'Picker index model name still carries body wording: {key!r}.')
     if index.get('availability') != powertrain_availability(expected):
         raise ValueError('Picker index availability map does not match the catalogue.')
     brands = {brand for brand, _, _ in expected}
@@ -1191,8 +1232,8 @@ def validate_catalog(items):
 
     `variant` carries neither the type-approval code (see `visible_variant()`) nor a
     `[CO₂ …]` disambiguation suffix any more, so the selector-label check below is exactly
-    the version list the picker builds (`fuel · variant · years`): a duplicate here is a
-    duplicate the user would see, and a bracketed label is the noise we dropped.
+    the version list the picker builds (`fuel · variant · body · years`): a duplicate here is
+    a duplicate the user would see, and a bracketed label is the noise we dropped.
     """
     if len({item['id'] for item in items}) != len(items):
         raise ValueError('Catalogue normalization produced duplicate IDs.')
@@ -1211,7 +1252,7 @@ def validate_catalog(items):
     if noisy:
         raise ValueError(f'Catalogue normalization produced a technical-noise variant label: {noisy!r}')
     visible_labels = [
-        (item['brand'], item['model'], item['powertrain'], item['variant'], item['years'], item['vehicle_type'])
+        (item['brand'], item['model'], item['powertrain'], item['variant'], item['years'], item['vehicle_type'], visible_body(item.get('body_type', '')))
         for item in items
     ]
     if len(set(visible_labels)) != len(visible_labels):

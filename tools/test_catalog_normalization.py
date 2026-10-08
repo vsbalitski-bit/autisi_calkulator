@@ -26,8 +26,8 @@ from build_traficom_catalog import (
     normalize_years,
     powertrain_availability,
     selectable_models,
-    strip_engine_words,
-    strip_variant_detail,
+    strip_body_words,
+    strip_engine_words,    visible_body,    strip_variant_detail,
     validate_catalog,
     validate_index,
     vehicle_type,
@@ -467,6 +467,54 @@ class CatalogNormalizationTests(unittest.TestCase):
         self.assertEqual(strip_engine_words('ID.4 PRO 150 kW'), 'ID.4 PRO 150 kW')
         # A name that is nothing but engine wording is kept as is.
         self.assertEqual(strip_engine_words('Hybrid'), 'Hybrid')
+
+    def test_body_words_are_dropped_from_model_names(self):
+        self.assertEqual(strip_body_words('A3 Sportback'), 'A3')
+        self.assertEqual(strip_body_words('A4 Avant'), 'A4')
+        self.assertEqual(strip_body_words('Golf Variant'), 'Golf')
+        self.assertEqual(strip_body_words('Octavia Kombi'), 'Octavia')
+        self.assertEqual(strip_body_words('Astra Sports Tourer'), 'Astra')
+        self.assertEqual(strip_body_words('Astra Station Wagon'), 'Astra')
+        self.assertEqual(strip_body_words('Accord Tourer'), 'Accord')
+        self.assertEqual(strip_body_words('Insignia Sports Tourer SW'), 'Insignia')
+        self.assertEqual(strip_body_words('Golf Farmari'), 'Golf')
+        self.assertEqual(strip_body_words('Astra Viistoperä'), 'Astra')
+        # A name that is nothing but a body word is kept as is.
+        self.assertEqual(strip_body_words('Kombi'), 'Kombi')
+        self.assertEqual(strip_body_words('Variant'), 'Variant')
+        # Trims and ambiguous body-as-model words are never stripped.
+        self.assertEqual(strip_body_words('Golf GTI'), 'Golf GTI')
+        self.assertEqual(strip_body_words('Cooper S'), 'Cooper S')
+        self.assertEqual(strip_body_words('TT Coupe'), 'TT Coupe')
+        self.assertEqual(strip_body_words('A5 Cabriolet'), 'A5 Cabriolet')
+        self.assertEqual(strip_body_words('Combo Van'), 'Combo Van')
+        self.assertEqual(strip_body_words('Ranger Pickup'), 'Ranger Pickup')
+
+    def test_visible_body_matches_the_picker_labels(self):
+        self.assertEqual(visible_body('AB'), 'Viistoperä')
+        self.assertEqual(visible_body('AC'), 'Farmari')
+        self.assertEqual(visible_body('BB'), 'Pakettiauto')
+        self.assertEqual(visible_body('SA'), 'Matkailuauto')
+        self.assertEqual(visible_body(''), '')
+        self.assertEqual(visible_body('CA'), '')  # bus: no body suffix
+
+    def test_body_variants_stay_separate_versions(self):
+        hatch = catalog_item('source-a', model='A3 Sportback', body_type='AB')
+        estate = catalog_item('source-b', model='A3 Sportback', body_type='AC')
+
+        result = normalize_catalog([hatch, estate])
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual({item['body_type'] for item in result}, {'AB', 'AC'})
+        self.assertEqual({item['model'] for item in result}, {'A3'})
+
+    def test_pickup_body_codes_share_one_visible_option(self):
+        flat = catalog_item('source-a', model='Ranger', body_type='BA', vehicle_type='pickup')
+        pick = catalog_item('source-b', model='Ranger', body_type='BE', vehicle_type='pickup')
+
+        result = normalize_catalog([flat, pick])
+
+        self.assertEqual(len(result), 1)
 
     def test_engine_only_model_names_are_unknown(self):
         self.assertTrue(model_is_unknown('MG', 'Electric'))

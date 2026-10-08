@@ -9,7 +9,7 @@ final class Autosi_Kululaskuri {
 	const OPTION_CATALOG  = 'autosi_kululaskuri_catalog';
 	const OPTION_CATALOG_META = 'autosi_kululaskuri_catalog_meta';
 	const OPTION_CATALOG_INDEX = 'autosi_kululaskuri_catalog_index';
-	const CATALOG_VERSION = '2026.10.08.2';
+	const CATALOG_VERSION = '2026.10.08.3';
 	const CACHE_GROUP     = 'autosi-kululaskuri';
 	const CACHE_TTL       = 3600;
 	const MAX_IMPORT_BYTES = 20971520; // 20 MiB upload ceiling for administrator CSV imports.
@@ -120,6 +120,18 @@ final class Autosi_Kululaskuri {
 					'hybrid'   => __( 'Täyshybridi', 'autosi-kululaskuri' ),
 					'phev'     => __( 'Lataushybridi', 'autosi-kululaskuri' ),
 					'electric' => __( 'Sähkö', 'autosi-kululaskuri' ),
+				),
+				'bodyLabels'             => array(
+					'AA' => __( 'Sedan', 'autosi-kululaskuri' ),
+					'AB' => __( 'Viistoperä', 'autosi-kululaskuri' ),
+					'AC' => __( 'Farmari', 'autosi-kululaskuri' ),
+					'AD' => __( 'Coupé', 'autosi-kululaskuri' ),
+					'AE' => __( 'Avoauto', 'autosi-kululaskuri' ),
+					'AF' => __( 'Tila-auto', 'autosi-kululaskuri' ),
+					'SA' => __( 'Matkailuauto', 'autosi-kululaskuri' ),
+					'BB' => __( 'Pakettiauto', 'autosi-kululaskuri' ),
+					'BA' => __( 'Avolava-auto', 'autosi-kululaskuri' ),
+					'BE' => __( 'Avolava-auto', 'autosi-kululaskuri' ),
 				),
 				// Selected vehicle note.
 				'techDataNote'           => __( 'Tekniset tiedot: Traficom 30.6.2026. %1$s %2$s %3$s %4$s (%5$s).', 'autosi-kululaskuri' ),

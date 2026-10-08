@@ -1,9 +1,9 @@
 """Review the version list ("Moottori / käyttövoima") for duplicate options.
 
 Read-only: groups the committed shards by the label the picker shows
-(``fuel · variant · years``, with the type-approval code stripped the same way the browser
-strips it) and reports every group that still holds more than one configuration — i.e. the
-duplicates a user would see — together with the fields that differ inside the group.
+(``fuel · variant · body · years``, with the type-approval code stripped the same way the
+browser strips it) and reports every group that still holds more than one configuration —
+i.e. the duplicates a user would see — together with the fields that differ inside the group.
 ``--by-type`` adds the vehicle type to the label, which is what separates otherwise
 identical rows when the type filter is "Ei väliä".
 
@@ -38,6 +38,7 @@ def label_of(row, by_type):
         row.get('model') or '',
         row.get('powertrain') or '',
         base.visible_variant(row.get('variant'), row.get('type_approval')),
+        base.visible_body(row.get('body_type')),
         row.get('years') or '',
     )
     return key + ((row.get('vehicle_type') or ''),) if by_type else key
@@ -125,9 +126,9 @@ def main():
     if args.csv:
         with open(args.csv, 'w', encoding='utf-8', newline='') as handle:
             writer = csv.writer(handle)
-            writer.writerow(['rows', 'brand', 'model', 'powertrain', 'variant', 'years', 'vehicle_type', 'differing_fields'])
+            writer.writerow(['rows', 'brand', 'model', 'powertrain', 'variant', 'body', 'years', 'vehicle_type', 'differing_fields'])
             for key, rows in ordered:
-                label = list(key) + [''] * (6 - len(key))
+                label = list(key) + [''] * (7 - len(key))
                 writer.writerow([len(rows), *label, '; '.join(sorted(differing_fields(rows)))])
         print(f'Wrote {args.csv}')
 

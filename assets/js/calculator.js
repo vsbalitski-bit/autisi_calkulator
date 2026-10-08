@@ -30,6 +30,7 @@
 		let comparisons = [];
 
 		const typeLabels = t.typeLabels || { petrol: 'Bensiini', diesel: 'Diesel', hybrid: 'Täyshybridi', phev: 'Lataushybridi', electric: 'Sähkö' };
+		const bodyLabels = t.bodyLabels || { AA: 'Sedan', AB: 'Viistoperä', AC: 'Farmari', AD: 'Coupé', AE: 'Avoauto', AF: 'Tila-auto', SA: 'Matkailuauto', BB: 'Pakettiauto', BA: 'Avolava-auto', BE: 'Avolava-auto' };
 		const number = value => Math.max( 0, Number( value ) || 0 );
 		const money = value => euro.format( value );
 		const moneyExact = value => euroPrecise.format( value );
@@ -236,9 +237,10 @@
 				// except when no type filter is chosen: the same text can then describe a car
 				// registered in two classes (passenger vs van), which the type name separates.
 				const typeSuffix = car => fields.vehicleType.value || ! car.vehicle_type ? '' : ` · ${ vehicleTypeLabel( car.vehicle_type ) }`;
+				const bodySuffix = car => { const body = bodyLabels[ car.body_type ]; return body ? ` · ${ body }` : ''; };
 				const versionOptions = cars.map( car => ( {
 					value: car.id,
-					label: `${ typeLabels[ car.powertrain ] || car.powertrain } · ${ cleanVariant( car ) } · ${ car.years }${ typeSuffix( car ) }`
+					label: `${ typeLabels[ car.powertrain ] || car.powertrain } · ${ cleanVariant( car ) }${ bodySuffix( car ) } · ${ car.years }${ typeSuffix( car ) }`
 				} ) ).sort( ( a, b ) => a.label.localeCompare( b.label, locale, { sensitivity: 'base' } ) );
 				fillSelect( fields.vehicle, versionOptions, t.versionPlaceholder );
 				if ( ! cars.length && powertrain ) {
