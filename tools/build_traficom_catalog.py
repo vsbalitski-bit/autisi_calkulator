@@ -169,6 +169,30 @@ BRAND_TYPO_ALIASES = {
     'willys-knight': 'Willys',
 }
 
+# Hand-curated MERGES of label variants that are one and the same make: a short form
+# of a fuller marque name (`Armstrong` -> `Armstrong Siddeley`, `Graham` ->
+# `Graham Paige`), a corporate/trade suffix that is not a legal form (`Karma Automotive
+# Llc` -> `Karma`, `Great Wall Motor` -> `Great Wall`, `Westfalia Mobil` ->
+# `Westfalia`, `Fendt-Caravan` -> `Fendt`), a composite whose base make is the marque
+# (`Matra-Simca`/`Talbot-Matra` -> `Matra`), an abbreviation of the full company name
+# (`London Taxis International` -> `Lti`), and model names parked in the make field
+# (`Mgb`/`Mga` -> `Mg`). Keys = `clean(brand).casefold()`. Real marques that merely
+# look alike (Matra/Mazda, Fiat/Faw…) are deliberately absent.
+BRAND_MERGE_ALIASES = {
+    'armstrong': 'Armstrong Siddeley',
+    'graham': 'Graham Paige',
+    'karma automotive llc': 'Karma',
+    'london taxis international': 'Lti',
+    'great wall motor': 'Great Wall',
+    'matra-simca': 'Matra',
+    'talbot-matra': 'Matra',
+    'mgb': 'Mg',
+    'mga': 'Mg',
+    'terraplane hudson': 'Terraplane',
+    'westfalia mobil': 'Westfalia',
+    'fendt-caravan': 'Fendt',
+}
+
 # Data-entry placeholders that are not makes at all; kept in the shards but not
 # offered in the Merkki picker.
 BRAND_PLACEHOLDERS = {'ks. huom.', 'övriga', 'omavalmiste', 'v-series 60 sp'}
@@ -383,6 +407,9 @@ def normalize_brand_name(brand):
     typo = BRAND_TYPO_ALIASES.get(value.casefold())
     if typo:
         return typo
+    merge = BRAND_MERGE_ALIASES.get(value.casefold())
+    if merge:
+        return merge
     for pattern, replacement in BRAND_ALIASES:
         value = pattern.sub(replacement, value)
     return strip_brand_suffix(value)
@@ -826,6 +853,39 @@ def normalize_model(brand, value):
     return value
 
 
+# Real model names the automatic filters misclassify, so they must always stay in the
+# Malli picker (inverse of `HIDDEN_MODELS`). `E-HS9` trips the variant-code pattern
+# (`-HS9`), `4/44` trips the approval-tail pattern (`/44`), `TYPE 57C STELVIO` equals
+# its own variant base (a designation false positive), and Irizar bus names carry
+# length/height figures. Keys = `(clean(brand).casefold(), canonical_model_key(brand, model))`.
+KEEP_MODELS = {
+    (clean(brand).casefold(), canonical_model_key(brand, model))
+    for brand, model in (
+        ('Faw', 'E-HS9'),
+        ('Wolseley', '4/44'),
+        ('Bugatti', 'TYPE 57C STELVIO'),
+        ('Irizar', 'i8 14.98 3.75'),
+        ('Irizar', 'i6 15.37'),
+        ('Irizar', '16 12.35 Efficient'),
+        ('Irizar', '1613.35 Efficient'),
+        # Modern EVs whose short commercial name equals its own variant base, so the
+        # designation detector drops the whole make.
+        ('Aion', 'Ut'),
+        ('Aion', 'V'),
+        ('Gac', 'AION V'),
+        ('Rivian', 'R1T'),
+        ('Zeekr', '001'),
+        ('Skywell', 'ET5'),
+        ('Skywell', 'BE11'),
+    )
+}
+
+
+def model_is_kept(brand, model):
+    """True when a curated entry must always be offered in the Malli picker."""
+    return (clean(brand).casefold(), canonical_model_key(brand, model)) in KEEP_MODELS
+
+
 def normalize_years(value):
     start, end = model_year_span(value)
     if start is None:
@@ -1116,6 +1176,8 @@ def model_hide_reason(brand, model, brand_total, model_total, newest_year):
         return 'placeholder-brand'
     if model_is_hidden(brand, model):
         return 'curated-hidden'
+    if model_is_kept(brand, model):
+        return ''
     if model_is_unknown(brand, model):
         return 'unknown'
     if model_is_technical(model):
@@ -1164,7 +1226,7 @@ def selectable_models(items):
             continue
         if model_is_blocked(brand, item['model']):
             continue
-        if model_is_designation(item['model'], item.get('variant', '')):
+        if not model_is_kept(brand, item['model']) and model_is_designation(item['model'], item.get('variant', '')):
             continue
         key = (brand, item['model'], item['vehicle_type'])
         codes = models.setdefault(key, set())

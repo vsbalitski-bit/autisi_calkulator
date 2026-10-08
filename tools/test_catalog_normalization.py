@@ -27,10 +27,13 @@ from build_traficom_catalog import (
     powertrain_availability,
     selectable_models,
     strip_body_words,
-    strip_engine_words,    visible_body,    strip_variant_detail,
+    strip_engine_words,
+    strip_variant_detail,
     validate_catalog,
     validate_index,
     vehicle_type,
+    visible_body,
+    model_is_kept,
     main,
 )
 
@@ -202,6 +205,42 @@ class CatalogNormalizationTests(unittest.TestCase):
         self.assertNotEqual(normalize_brand_name('Mazda'), normalize_brand_name('Matra'))
         self.assertNotEqual(normalize_brand_name('Fiat'), normalize_brand_name('Faw'))
         self.assertNotEqual(normalize_brand_name('Man'), normalize_brand_name('Mini'))
+
+    def test_brand_label_variants_merge_into_one_make(self):
+        self.assertEqual(normalize_brand_name('Armstrong'), 'Armstrong Siddeley')
+        self.assertEqual(normalize_brand_name('Graham'), 'Graham Paige')
+        self.assertEqual(normalize_brand_name('Karma Automotive Llc'), 'Karma')
+        self.assertEqual(normalize_brand_name('London Taxis International'), 'Lti')
+        self.assertEqual(normalize_brand_name('Great Wall Motor'), 'Great Wall')
+        self.assertEqual(normalize_brand_name('Matra-Simca'), 'Matra')
+        self.assertEqual(normalize_brand_name('Talbot-Matra'), 'Matra')
+        self.assertEqual(normalize_brand_name('Mgb'), 'Mg')
+        self.assertEqual(normalize_brand_name('Mga'), 'Mg')
+        self.assertEqual(normalize_brand_name('Terraplane Hudson'), 'Terraplane')
+        self.assertEqual(normalize_brand_name('Westfalia Mobil'), 'Westfalia')
+        self.assertEqual(normalize_brand_name('Fendt-Caravan'), 'Fendt')
+
+    def test_kept_models_are_flagged(self):
+        self.assertTrue(model_is_kept('Faw', 'E-HS9'))
+        self.assertTrue(model_is_kept('Wolseley', '4/44'))
+        self.assertTrue(model_is_kept('Bugatti', 'TYPE 57C STELVIO'))
+        self.assertTrue(model_is_kept('Irizar', 'i8 14.98 3.75'))
+        self.assertTrue(model_is_kept('Aion', 'V'))
+        self.assertTrue(model_is_kept('Rivian', 'R1T'))
+        self.assertTrue(model_is_kept('Zeekr', '001'))
+        self.assertTrue(model_is_kept('Skywell', 'ET5'))
+        self.assertFalse(model_is_kept('Volvo', '940'))
+
+    def test_kept_models_survive_selectable_filtering(self):
+        items = [
+            catalog_item('a', brand='Faw', model='E-HS9', registered_count=17),
+            catalog_item('b', brand='Wolseley', model='4/44', registered_count=4),
+            catalog_item('c', brand='Bugatti', model='TYPE 57C STELVIO', variant='TYPE 57C STELVIO, 118 kW', registered_count=2),
+        ]
+        offered = {(brand, model) for brand, model, _ in selectable_models(items)}
+        self.assertIn(('Faw', 'E-HS9'), offered)
+        self.assertIn(('Wolseley', '4/44'), offered)
+        self.assertIn(('Bugatti', 'TYPE 57C STELVIO'), offered)
 
     def test_placeholder_makes_are_flagged(self):
         self.assertTrue(brand_is_placeholder('Ks. Huom.'))
