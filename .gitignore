@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Local temp/log files
+*.log
+*.tmp
+*.bak
+.tmp/
+cache/
+
+# Local data dumps or scratch files
+*.orig
+*.rej
