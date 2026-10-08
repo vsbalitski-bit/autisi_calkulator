@@ -239,7 +239,7 @@
 				const versionOptions = cars.map( car => ( {
 					value: car.id,
 					label: `${ typeLabels[ car.powertrain ] || car.powertrain } · ${ cleanVariant( car ) } · ${ car.years }${ typeSuffix( car ) }`
-				} ) );
+				} ) ).sort( ( a, b ) => a.label.localeCompare( b.label, locale, { sensitivity: 'base' } ) );
 				fillSelect( fields.vehicle, versionOptions, t.versionPlaceholder );
 				if ( ! cars.length && powertrain ) {
 					root.querySelector( '.ak-model-note' ).textContent = t.noVersionsForFuel;
