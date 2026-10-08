@@ -118,6 +118,21 @@ def candidate_score(item, candidate):
     return score
 
 
+def item_approvals(item):
+    """Every type approval a merged catalogue row can match against: the top-level
+    approval plus the ones preserved in `source_records`."""
+    approvals = []
+    seen = set()
+    for value in [(item.get('type_approval') or '').strip().upper()] + [
+        (record.get('type_approval') or '').strip().upper()
+        for record in (item.get('source_records') or [])
+    ]:
+        if value and value not in seen:
+            seen.add(value)
+            approvals.append(value)
+    return approvals
+
+
 def main():
     matched = 0
     total = 0
@@ -125,7 +140,7 @@ def main():
     for shard_path in sorted(SHARD_DIR.glob('*.json.gz')):
         items = load_shard(shard_path)
         total += len(items)
-        approvals = sorted({item['type_approval'].upper() for item in items if item.get('type_approval')})
+        approvals = sorted({approval for item in items for approval in item_approvals(item)})
         pending_approvals = [approval for approval in approvals if approval not in queried_approvals]
         for offset in range(0, len(pending_approvals), CHUNK_SIZE):
             approval_batch = pending_approvals[offset:offset + CHUNK_SIZE]
@@ -138,8 +153,12 @@ def main():
             time.sleep(0.25)
 
         for item in items:
-            pool = by_approval.get(item.get('type_approval', '').upper(), [])
-            usable = [candidate for candidate in pool if candidate.get('Fc') is not None or candidate.get('Z (Wh/km)') is not None]
+            usable = []
+            for approval in item_approvals(item):
+                pool = by_approval.get(approval, [])
+                usable = [candidate for candidate in pool if candidate.get('Fc') is not None or candidate.get('Z (Wh/km)') is not None]
+                if usable:
+                    break
             if not usable:
                 item['consumption_source'] = 'CO2-derived/default estimate; no matching official EEA record'
                 item['service_source'] = 'Public benchmark: Traficom calculator methodology (annualised); VIN/manufacturer plan required'

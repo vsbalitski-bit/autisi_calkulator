@@ -9,7 +9,7 @@ final class Autosi_Kululaskuri {
 	const OPTION_CATALOG  = 'autosi_kululaskuri_catalog';
 	const OPTION_CATALOG_META = 'autosi_kululaskuri_catalog_meta';
 	const OPTION_CATALOG_INDEX = 'autosi_kululaskuri_catalog_index';
-	const CATALOG_VERSION = '2026.10.08.1';
+	const CATALOG_VERSION = '2026.10.08.2';
 	const CACHE_GROUP     = 'autosi-kululaskuri';
 	const CACHE_TTL       = 3600;
 	const MAX_IMPORT_BYTES = 20971520; // 20 MiB upload ceiling for administrator CSV imports.
